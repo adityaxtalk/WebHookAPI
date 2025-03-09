@@ -28,7 +28,7 @@ This project is a webhook receiver that listens for incoming webhook requests, v
 ### Steps to Run the Project
 1. Clone the repository:
    ```sh
-   git clone <repository-url>
+   git clone https://github.com/adityaxtalk/WebHookAPI.git
    cd WebhookReceiver
    ```
 
