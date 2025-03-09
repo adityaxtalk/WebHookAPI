@@ -13,10 +13,13 @@ namespace WebhookReceiver.Controllers
 
         private readonly ILogger<HomeController> _logger;
         
-        public HomeController(ILogger<HomeController> logger, WebhookServices webhookServices)
+        private readonly IConfiguration _configuration;
+
+        public HomeController(ILogger<HomeController> logger, WebhookServices webhookServices, IConfiguration configuration)
         {
             _webhookServices = webhookServices;
-            _logger= logger;
+            _logger = logger;
+            _configuration = configuration;
         }
 
         [HttpPost("alerts")]
@@ -70,8 +73,8 @@ namespace WebhookReceiver.Controllers
             string jsonResult = payload.ToString();
 
             _logger.LogInformation($"Recieved Invalid Github Webhook: {jsonResult}");
-
-            if (!_webhookServices.ValidateGithubSignature(jsonResult, signature))
+            string secretKey = _configuration["GitHubSecret"];
+            if (!_webhookServices.ValidateSignature(jsonResult, signature, secretKey))
             {
                 return Unauthorized("Invalid Github Signature");
             }
