@@ -19,13 +19,11 @@ namespace WebhookReceiver.Services
 
         private readonly EmailSettings _emailSettings;
 
-        private readonly string _githubSecret;
         public WebhookServices(ApplicationDbContext context, IConfiguration configuration, ILogger<WebhookServices> logger)
         {
             _context = context;
             _configuration = configuration;
             _logger = logger;
-            _githubSecret = configuration["GitHubSecret"] ?? throw new ArgumentNullException(nameof(_githubSecret));
             _emailSettings = configuration.GetSection("EmailSettings").Get<EmailSettings>();
         }
 
@@ -34,12 +32,6 @@ namespace WebhookReceiver.Services
 
             try
             {
-                var email = new MimeMessage();
-
-                email.From.Add(new MailboxAddress("Alerts", _emailSettings.SenderEmail));
-                email.To.Add(new MailboxAddress("", _emailSettings.RecipientEmail));
-                email.Subject = subject;
-                email.Body = new TextPart("plain") { Text = body };
 
                 var smtp = new SmtpClient(_emailSettings.SmtpServer, _emailSettings.SmtpPort);
                 smtp.EnableSsl = true;
@@ -66,13 +58,34 @@ namespace WebhookReceiver.Services
             
         }
 
-        public bool ValidateGithubSignature(string payload, string signature)
+        public bool ValidateSignature(string payload, string signature, string secretKey)
         {
-            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_githubSecret));
-            var computedHash=hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
-            var computedSignature=$"sha256={BitConverter.ToString(computedHash).Replace("-","").ToLower()}";
-            return computedSignature.Equals(computedHash);
+            try
+            {
+                if (string.IsNullOrEmpty(signature) || string.IsNullOrEmpty(secretKey))
+                {
+                    _logger.LogWarning("Missing signature or secret key for webhook validation.");
+                    return false;
+                }
+
+                using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secretKey));
+                var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+                var computedSignature = $"sha256={BitConverter.ToString(computedHash).Replace("-", "").ToLower()}";
+
+                bool isValid = computedSignature.Equals(signature, StringComparison.OrdinalIgnoreCase);
+                if (!isValid)
+                {
+                    _logger.LogWarning("Invalid webhook signature.");
+                }
+                return isValid;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validating webhook signature.");
+                return false;
+            }
         }
+
         public async Task<Boolean> SaveAlert(Alert alert)
         {
             try
